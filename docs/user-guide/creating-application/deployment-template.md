@@ -575,50 +575,9 @@ If you want to see application metrics like different HTTP status codes metrics,
 
 Once all the Deployment template configurations are done, click on `Save` to save your deployment configuration. Now you are ready to create [Workflow](workflow/) to do CI/CD.
 
-### Helm Chart Json Schema
+### Helm Chart Json Schema Table
 
 Helm Chart json schema is used to validate the deployment template values.
-
-```
-"resources": {
-"type" : "object",
-"properties": {
-    "limits": {
-    "type" : "object",
-    "properties": {
-        "cpu": {
-        "type" : "string",
-        "format": "cpu"
-        },
-        "memory": {
-        "type" : "string",
-        "format": "memory"
-        }
-    },
-    "required":["cpu","memory"]
-    },
-    "requests": {
-    "type" : "object",
-    "properties": {
-        "cpu": {
-        "type" : "string",
-        "format": "cpu"
-        },
-        "memory": {
-        "type" : "string",
-        "format": "memory"
-
-        }
-    }
-    
-    }
-},
-"required":["limits"]
-}
-```
-
-
-### Json Schema Table
 
 | Chart Version | Link |
 | :--- | :--- |
