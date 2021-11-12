@@ -641,13 +641,13 @@ func (handler PipelineConfigRestHandlerImpl) ConfigureDeploymentTemplateForApp(w
 		}(ctx.Done(), cn.CloseNotify())
 	}
 	ctx = context.WithValue(r.Context(), "token", token)
-	createResp, err := handler.chartService.Create(templateRequest, ctx)
+	_,isAppMetricsUpdateSuccessful, err := handler.chartService.Create(templateRequest, ctx)
 	if err != nil {
 		handler.Logger.Errorw("service err, ConfigureDeploymentTemplateForApp", "err", err, "payload", templateRequest)
 		writeJsonResp(w, err, nil, http.StatusInternalServerError)
 		return
 	}
-	writeJsonResp(w, err, createResp, http.StatusOK)
+	writeJsonResp(w, err, isAppMetricsUpdateSuccessful, http.StatusOK)
 }
 
 func (handler PipelineConfigRestHandlerImpl) CreateCdPipeline(w http.ResponseWriter, r *http.Request) {
@@ -1036,7 +1036,6 @@ func (handler PipelineConfigRestHandlerImpl) GetDeploymentTemplate(w http.Respon
 				writeJsonResp(w, err, nil, http.StatusInternalServerError)
 				return
 			}
-
 			if pg.ErrNoRows == err {
 				template.ChartRefId = chartRefId
 				template.Id = 0
@@ -1274,7 +1273,6 @@ func (handler PipelineConfigRestHandlerImpl) UpdateAppOverride(w http.ResponseWr
 		writeJsonResp(w, err, "Unauthorized User", http.StatusUnauthorized)
 		return
 	}
-
 	var templateRequest pipeline.TemplateRequest
 	err = decoder.Decode(&templateRequest)
 	templateRequest.UserId = userId
@@ -1283,7 +1281,6 @@ func (handler PipelineConfigRestHandlerImpl) UpdateAppOverride(w http.ResponseWr
 		writeJsonResp(w, err, nil, http.StatusBadRequest)
 		return
 	}
-
 	err = handler.validator.Struct(templateRequest)
 	if err != nil {
 		handler.Logger.Errorw("validation err, UpdateAppOverride", "err", err, "payload", templateRequest)
@@ -1291,7 +1288,6 @@ func (handler PipelineConfigRestHandlerImpl) UpdateAppOverride(w http.ResponseWr
 		return
 	}
 	handler.Logger.Infow("request payload, UpdateAppOverride", "payload", templateRequest)
-
 	token := r.Header.Get("token")
 	app, err := handler.pipelineBuilder.GetApp(templateRequest.AppId)
 	if err != nil {
@@ -1311,14 +1307,13 @@ func (handler PipelineConfigRestHandlerImpl) UpdateAppOverride(w http.ResponseWr
 		writeJsonResp(w, error, nil, http.StatusBadRequest)
 		return
 	}
-	createResp, err := handler.chartService.UpdateAppOverride(&templateRequest)
+	_, isAppMetricsUpdateSuccessful, err := handler.chartService.UpdateAppOverride(&templateRequest)
 	if err != nil {
 		handler.Logger.Errorw("service err, UpdateAppOverride", "err", err, "payload", templateRequest)
 		writeJsonResp(w, err, nil, http.StatusInternalServerError)
 		return
 	}
-	writeJsonResp(w, err, createResp, http.StatusOK)
-
+	writeJsonResp(w, err, isAppMetricsUpdateSuccessful, http.StatusOK)
 }
 func (handler PipelineConfigRestHandlerImpl) FetchArtifactForRollback(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
