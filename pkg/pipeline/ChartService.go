@@ -32,6 +32,7 @@ import (
 	"github.com/devtron-labs/devtron/internal/sql/repository/pipelineConfig"
 	"github.com/devtron-labs/devtron/internal/util"
 	util2 "github.com/devtron-labs/devtron/util"
+	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/ghodss/yaml"
 	"github.com/go-pg/pg"
 	"github.com/juju/errors"
@@ -119,6 +120,7 @@ type ChartService interface {
 	UpgradeForApp(appId int, chartRefId int, newAppOverride map[string]json.RawMessage, userId int32, ctx context.Context) (bool, error)
 	AppMetricsEnableDisable(appMetricRequest AppMetricEnableDisableRequest) (*AppMetricEnableDisableRequest, error)
 	DeploymentTemplateValidate(templatejson interface{}, chartRefId int) (bool, error)
+	DefaultTemplateWithSavedTemplateData(RequestChartRefId int,templateRequest *TemplateRequest)(json.RawMessage, error)
 }
 type ChartServiceImpl struct {
 	chartRepository           chartConfig.ChartRepository
@@ -1193,4 +1195,30 @@ func (impl ChartServiceImpl) JsonSchemaExtractFromFile(chartRefId int) (map[stri
 		}
 		return schemajson, nil
 	}
+}
+func (impl ChartServiceImpl) DefaultTemplateWithSavedTemplateData(RequestChartRefId int,templateRequest *TemplateRequest)(json.RawMessage, error){
+	appOverride,err:= impl.GetAppOverrideForDefaultTemplate(RequestChartRefId)
+	if err != nil {
+		impl.logger.Errorw("GetAppOverrideForDefaultTemplate err, appOverride", "err", err)
+		return nil, err
+	}
+	appOverrideMarshalJson, err := json.Marshal(appOverride["defaultAppOverride"])
+	if err != nil {
+		impl.logger.Errorw("appOverrideMarshalJson err, GetDeploymentTemplate", "err", err)
+		return nil, err
+	}
+	DefaultAppOverrideMarshalJson, err := json.Marshal(templateRequest.DefaultAppOverride)
+	if err != nil {
+		impl.logger.Errorw("DefaultAppOverrideMarshalJson err, GetDeploymentTemplate", "err", err)
+		return nil, err
+
+	}
+	withCombinedPatch, err := jsonpatch.MergePatch(appOverrideMarshalJson, DefaultAppOverrideMarshalJson)
+	if err != nil {
+		impl.logger.Errorw("withCombinedPatch err, MergePatch err, GetDeploymentTemplate", "err", err)
+		return nil, err
+	}
+	messages := json.RawMessage(withCombinedPatch)
+	return messages, nil
+
 }
