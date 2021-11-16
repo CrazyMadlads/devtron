@@ -605,13 +605,7 @@ func (handler PipelineConfigRestHandlerImpl) ConfigureDeploymentTemplateForApp(w
 		writeJsonResp(w, err, nil, http.StatusBadRequest)
 		return
 	}
-	chartRefId := templateRequest.ChartRefId
-	validate, error := handler.chartService.DeploymentTemplateValidate(templateRequest.ValuesOverride, chartRefId)
-	if !validate {
-		writeJsonResp(w, error, nil, http.StatusBadRequest)
 
-		return
-	}
 	handler.Logger.Infow("request payload, ConfigureDeploymentTemplateForApp", "payload", templateRequest)
 	err = handler.validator.Struct(templateRequest)
 	if err != nil {
@@ -641,13 +635,13 @@ func (handler PipelineConfigRestHandlerImpl) ConfigureDeploymentTemplateForApp(w
 		}(ctx.Done(), cn.CloseNotify())
 	}
 	ctx = context.WithValue(r.Context(), "token", token)
-	_,isAppMetricsUpdateSuccessful, err := handler.chartService.Create(templateRequest, ctx)
+	createResp, err := handler.chartService.Create(templateRequest, ctx)
 	if err != nil {
 		handler.Logger.Errorw("service err, ConfigureDeploymentTemplateForApp", "err", err, "payload", templateRequest)
 		writeJsonResp(w, err, nil, http.StatusInternalServerError)
 		return
 	}
-	writeJsonResp(w, err, isAppMetricsUpdateSuccessful, http.StatusOK)
+	writeJsonResp(w, err, createResp, http.StatusOK)
 }
 
 func (handler PipelineConfigRestHandlerImpl) CreateCdPipeline(w http.ResponseWriter, r *http.Request) {
@@ -816,6 +810,26 @@ func (handler PipelineConfigRestHandlerImpl) EnvConfigOverrideCreate(w http.Resp
 		writeJsonResp(w, fmt.Errorf("unauthorized user"), "Unauthorized User", http.StatusForbidden)
 		return
 	}
+	ChartRefId := envConfigProperties.ChartRefId
+	defaultTemplate,err:= handler.chartService.GetAppOverrideForDefaultTemplate(ChartRefId)
+	if err != nil {
+		handler.Logger.Errorw("defaultTemplate err, EnvConfigOverrideUpdate", "err", err, "payload", envConfigProperties)
+		writeJsonResp(w, err, nil, http.StatusInternalServerError)
+		return
+	}
+
+	mergeDefaultTemplateWithEnvOverrideValues, err := handler.propertiesConfigService.MergeValidation(defaultTemplate,envConfigProperties.EnvOverrideValues)
+	if err != nil {
+		handler.Logger.Errorw("mergeValidation err, EnvConfigOverrideUpdate", "err", err, "payload", envConfigProperties)
+		writeJsonResp(w, err, nil, http.StatusInternalServerError)
+		return
+	}
+	validate, error := handler.chartService.DeploymentTemplateValidate(mergeDefaultTemplateWithEnvOverrideValues, ChartRefId)
+	if !validate {
+		handler.Logger.Errorw("validate err, EnvConfigOverrideUpdate", "err", error, "payload", envConfigProperties)
+		writeJsonResp(w, error, nil, http.StatusBadRequest)
+		return
+	}
 	createResp, err := handler.propertiesConfigService.CreateEnvironmentProperties(appId, &envConfigProperties)
 	if err != nil {
 		if err.Error() == bean2.NOCHARTEXIST {
@@ -855,6 +869,7 @@ func (handler PipelineConfigRestHandlerImpl) EnvConfigOverrideCreate(w http.Resp
 			return
 		}
 	}
+
 	writeJsonResp(w, err, createResp, http.StatusOK)
 }
 
@@ -868,13 +883,6 @@ func (handler PipelineConfigRestHandlerImpl) EnvConfigOverrideUpdate(w http.Resp
 	}
 	var envConfigProperties pipeline.EnvironmentProperties
 	err = decoder.Decode(&envConfigProperties)
-	chartRefId := envConfigProperties.ChartRefId
-	validate, error := handler.chartService.DeploymentTemplateValidate(envConfigProperties.EnvOverrideValues, chartRefId)
-	if !validate {
-		handler.Logger.Errorw("validation err, UpdateAppOverride", "err", error, "payload", envConfigProperties)
-		writeJsonResp(w, error, nil, http.StatusBadRequest)
-		return
-	}
 	envConfigProperties.UserId = userId
 	if err != nil {
 		handler.Logger.Errorw("request err, EnvConfigOverrideUpdate", "err", err, "payload", envConfigProperties)
@@ -897,6 +905,7 @@ func (handler PipelineConfigRestHandlerImpl) EnvConfigOverrideUpdate(w http.Resp
 	}
 	appId := envConfigOverride.Chart.AppId
 	envId := envConfigOverride.TargetEnvironment
+
 	resourceName := handler.enforcerUtil.GetAppRBACNameByAppId(appId)
 	if ok := handler.enforcer.Enforce(token, rbac.ResourceApplications, rbac.ActionUpdate, resourceName); !ok {
 		writeJsonResp(w, fmt.Errorf("unauthorized user"), "Unauthorized User", http.StatusForbidden)
@@ -905,6 +914,27 @@ func (handler PipelineConfigRestHandlerImpl) EnvConfigOverrideUpdate(w http.Resp
 	object := handler.enforcerUtil.GetEnvRBACNameByAppId(appId, envId)
 	if ok := handler.enforcer.Enforce(token, rbac.ResourceEnvironment, rbac.ActionUpdate, object); !ok {
 		writeJsonResp(w, fmt.Errorf("unauthorized user"), "Unauthorized User", http.StatusForbidden)
+		return
+	}
+
+	ChartRefId := envConfigProperties.ChartRefId
+	defaultTemplate,err:= handler.chartService.GetAppOverrideForDefaultTemplate(ChartRefId)
+	if err != nil {
+		handler.Logger.Errorw("defaultTemplate err, EnvConfigOverrideUpdate", "err", err, "payload", envConfigProperties)
+		writeJsonResp(w, err, nil, http.StatusInternalServerError)
+		return
+	}
+
+	mergeDefaultTemplateWithEnvOverrideValues, err := handler.propertiesConfigService.MergeValidation(defaultTemplate,envConfigProperties.EnvOverrideValues)
+	if err != nil {
+		handler.Logger.Errorw("mergeValidation err, EnvConfigOverrideUpdate", "err", err, "payload", envConfigProperties)
+		writeJsonResp(w, err, nil, http.StatusInternalServerError)
+		return
+	}
+	validate, error := handler.chartService.DeploymentTemplateValidate(mergeDefaultTemplateWithEnvOverrideValues, ChartRefId)
+	if !validate {
+		handler.Logger.Errorw("validate err, EnvConfigOverrideUpdate", "err", error, "payload", envConfigProperties)
+		writeJsonResp(w, error, nil, http.StatusBadRequest)
 		return
 	}
 	createResp, err := handler.propertiesConfigService.UpdateEnvironmentProperties(appId, &envConfigProperties, userId)
@@ -985,6 +1015,7 @@ func (handler PipelineConfigRestHandlerImpl) GetCiPipeline(w http.ResponseWriter
 	}
 	writeJsonResp(w, err, ciConf, http.StatusOK)
 }
+
 func (handler PipelineConfigRestHandlerImpl) GetDeploymentTemplate(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	appId, err := strconv.Atoi(vars["appId"])
@@ -993,13 +1024,13 @@ func (handler PipelineConfigRestHandlerImpl) GetDeploymentTemplate(w http.Respon
 		writeJsonResp(w, err, nil, http.StatusBadRequest)
 		return
 	}
-	RequestChartRefId, err := strconv.Atoi(vars["chartRefId"])
+	chartRefId, err := strconv.Atoi(vars["chartRefId"])
 	if err != nil {
 		handler.Logger.Error(err)
 		writeJsonResp(w, err, nil, http.StatusBadRequest)
 		return
 	}
-	handler.Logger.Infow("request payload, GetDeploymentTemplate", "appId", appId, "chartRefId", RequestChartRefId)
+	handler.Logger.Infow("request payload, GetDeploymentTemplate", "appId", appId, "chartRefId", chartRefId)
 	token := r.Header.Get("token")
 	app, err := handler.pipelineBuilder.GetApp(appId)
 	if err != nil {
@@ -1017,53 +1048,36 @@ func (handler PipelineConfigRestHandlerImpl) GetDeploymentTemplate(w http.Respon
 
 	template, err := handler.chartService.FindLatestChartForAppByAppId(appId)
 	if err != nil && pg.ErrNoRows != err {
-		handler.Logger.Errorw("service err, GetDeploymentTemplate", "err", err, "appId", appId, "chartRefId", RequestChartRefId)
+		handler.Logger.Errorw("service err, GetDeploymentTemplate", "err", err, "appId", appId, "chartRefId", chartRefId)
 		writeJsonResp(w, err, nil, http.StatusInternalServerError)
 		return
 	}
 	if pg.ErrNoRows == err {
-		appOverride, err := handler.chartService.GetAppOverrideForDefaultTemplate(RequestChartRefId)
+		appOverride, err := handler.chartService.GetAppOverrideForDefaultTemplate(chartRefId)
 		if err != nil {
-			handler.Logger.Errorw("service err, GetDeploymentTemplate", "err", err, "appId", appId, "chartRefId", RequestChartRefId)
+			handler.Logger.Errorw("service err, GetDeploymentTemplate", "err", err, "appId", appId, "chartRefId", chartRefId)
 			writeJsonResp(w, err, nil, http.StatusInternalServerError)
 			return
 		}
-
 		mapB, _ := json.Marshal(appOverride)
 		if err != nil {
-			handler.Logger.Errorw("marshal err, GetDeploymentTemplate", "err", err, "appId", appId, "chartRefId", RequestChartRefId)
+			handler.Logger.Errorw("marshal err, GetDeploymentTemplate", "err", err, "appId", appId, "chartRefId", chartRefId)
 			return
 		}
-
 		appConfigResponse["globalConfig"] = mapB
 	} else {
-		if template.ChartRefId != RequestChartRefId {
-			templateRequested, err := handler.chartService.GetByAppIdAndChartRefId(appId, RequestChartRefId)
+		if template.ChartRefId != chartRefId {
+			templateRequested, err := handler.chartService.GetByAppIdAndChartRefId(appId, chartRefId)
 			if err != nil && err != pg.ErrNoRows {
-				handler.Logger.Errorw("service err, GetDeploymentTemplate", "err", err, "appId", appId, "chartRefId", RequestChartRefId)
+				handler.Logger.Errorw("service err, GetDeploymentTemplate", "err", err, "appId", appId, "chartRefId", chartRefId)
 				writeJsonResp(w, err, nil, http.StatusInternalServerError)
 				return
 			}
 
 			if pg.ErrNoRows == err {
-				withCombinedPatch, err := handler.chartService.DefaultTemplateWithSavedTemplateData(RequestChartRefId,template)
-				if err != nil {
-					handler.Logger.Errorw("service err, GetDeploymentTemplate", "err", err, "appId", appId, "chartRefId", RequestChartRefId)
-					writeJsonResp(w, err, nil, http.StatusInternalServerError)
-					return
-				}
-				template.ChartRefId = RequestChartRefId
+				template.ChartRefId = chartRefId
 				template.Id = 0
-				template.DefaultAppOverride = withCombinedPatch
-				bytes, err := json.Marshal(template)
-				if err != nil {
-					handler.Logger.Errorw("marshal err, GetDeploymentTemplate", "err", err, "appId", appId, "chartRefId", RequestChartRefId)
-					return
-				}
-				appOverride := json.RawMessage(bytes)
-				appConfigResponse["globalConfig"] = appOverride
-				writeJsonResp(w, nil, appConfigResponse, http.StatusOK)
-				return
+				template.Latest = false
 			} else {
 				template.ChartRefId = templateRequested.ChartRefId
 				template.Id = templateRequested.Id
@@ -1076,7 +1090,7 @@ func (handler PipelineConfigRestHandlerImpl) GetDeploymentTemplate(w http.Respon
 
 		bytes, err := json.Marshal(template)
 		if err != nil {
-			handler.Logger.Errorw("marshal err, GetDeploymentTemplate", "err", err, "appId", appId, "chartRefId", RequestChartRefId)
+			handler.Logger.Errorw("marshal err, GetDeploymentTemplate", "err", err, "appId", appId, "chartRefId", chartRefId)
 			return
 		}
 		appOverride := json.RawMessage(bytes)
@@ -1085,7 +1099,6 @@ func (handler PipelineConfigRestHandlerImpl) GetDeploymentTemplate(w http.Respon
 
 	writeJsonResp(w, nil, appConfigResponse, http.StatusOK)
 }
-
 
 func (handler PipelineConfigRestHandlerImpl) GetCdPipelines(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
@@ -1238,7 +1251,7 @@ func (handler PipelineConfigRestHandlerImpl) GetArtifactsByCDPipeline(w http.Res
 				if err != nil {
 					handler.Logger.Errorw("service err, GetArtifactsByCDPipeline", "err", err, "cdPipelineId", cdPipelineId, "stage", stage)
 				}
-				if blockCveList != nil && len(blockCveList) > 0 {
+				if len(blockCveList) > 0 {
 					vulnerableMap[digest] = true
 				}
 			}
@@ -1313,6 +1326,7 @@ func (handler PipelineConfigRestHandlerImpl) UpdateAppOverride(w http.ResponseWr
 		return
 	}
 	handler.Logger.Infow("request payload, UpdateAppOverride", "payload", templateRequest)
+
 	token := r.Header.Get("token")
 	app, err := handler.pipelineBuilder.GetApp(templateRequest.AppId)
 	if err != nil {
@@ -1325,20 +1339,15 @@ func (handler PipelineConfigRestHandlerImpl) UpdateAppOverride(w http.ResponseWr
 		writeJsonResp(w, fmt.Errorf("unauthorized user"), "Unauthorized User", http.StatusForbidden)
 		return
 	}
-	chartRefId := templateRequest.ChartRefId
-	validate, error := handler.chartService.DeploymentTemplateValidate(templateRequest.ValuesOverride, chartRefId)
-	if !validate {
-		handler.Logger.Errorw("validation err, UpdateAppOverride", "err", error, "payload", templateRequest)
-		writeJsonResp(w, error, nil, http.StatusBadRequest)
-		return
-	}
-	_, isAppMetricsUpdateSuccessful, err := handler.chartService.UpdateAppOverride(&templateRequest)
+
+	createResp, err := handler.chartService.UpdateAppOverride(&templateRequest)
 	if err != nil {
 		handler.Logger.Errorw("service err, UpdateAppOverride", "err", err, "payload", templateRequest)
 		writeJsonResp(w, err, nil, http.StatusInternalServerError)
 		return
 	}
-	writeJsonResp(w, err, isAppMetricsUpdateSuccessful, http.StatusOK)
+	writeJsonResp(w, err, createResp, http.StatusOK)
+
 }
 func (handler PipelineConfigRestHandlerImpl) FetchArtifactForRollback(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)

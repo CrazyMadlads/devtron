@@ -34,7 +34,7 @@ This defines ports on which application services will be exposed to other servic
 ```yaml
 ContainerPort:
   - envoyPort: 8799
-    idleTimeout: 
+    idleTimeout:
     name: app
     port: 8080
     servicePort: 80
@@ -75,7 +75,7 @@ LivenessProbe:
   scheme: ""
   tcp: true
 ```
- 
+
 | Key | Description |
 | :--- | :--- |
 | `Path` | It define the path where the liveness needs to be checked. |
@@ -90,7 +90,7 @@ LivenessProbe:
 
 
 ### MaxUnavailable
- 
+
  ```yaml
   MaxUnavailable: 0
 ```
