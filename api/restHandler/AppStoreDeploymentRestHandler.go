@@ -116,19 +116,8 @@ func (handler InstalledAppRestHandlerImpl) CreateInstalledApp(w http.ResponseWri
 	}
 	token := r.Header.Get("token")
 	//rbac block starts from here
-	team, err := handler.teamService.FetchOne(request.TeamId)
-	if err != nil {
-		handler.Logger.Errorw("service err, CreateInstalledApp", "err", err, "payload", request)
-		common.WriteJsonResp(w, err, nil, http.StatusInternalServerError)
-		return
-	}
-	teamRbac := team.Name + "/" + request.AppName
-	if ok := handler.enforcer.Enforce(token, casbin.ResourceApplications, casbin.ActionCreate, teamRbac); !ok {
-		common.WriteJsonResp(w, fmt.Errorf("unauthorized user"), nil, http.StatusForbidden)
-		return
-	}
-	object := handler.enforcerUtil.GetAppRBACByAppNameAndEnvId(request.AppName, request.EnvironmentId)
-	if ok := handler.enforcer.Enforce(token, casbin.ResourceEnvironment, casbin.ActionCreate, object); !ok {
+	object := handler.enforcerUtil.GetObjectForHelmByAppIdAndEnvId(request.AppId, request.EnvironmentId)
+	if ok := handler.enforcer.Enforce(token, casbin.ResourceHelmAppWorkFlow, casbin.ActionCreate, object); !ok {
 		common.WriteJsonResp(w, fmt.Errorf("unauthorized user"), nil, http.StatusForbidden)
 		return
 	}
@@ -200,13 +189,8 @@ func (handler InstalledAppRestHandlerImpl) UpdateInstalledApp(w http.ResponseWri
 		return
 	}
 	//rbac block starts from here
-	object := handler.enforcerUtil.GetAppRBACNameByAppId(installedApp.AppId)
-	if ok := handler.enforcer.Enforce(token, casbin.ResourceApplications, casbin.ActionUpdate, object); !ok {
-		common.WriteJsonResp(w, fmt.Errorf("unauthorized user"), nil, http.StatusForbidden)
-		return
-	}
-	object = handler.enforcerUtil.GetEnvRBACNameByAppId(installedApp.AppId, installedApp.EnvironmentId)
-	if ok := handler.enforcer.Enforce(token, casbin.ResourceEnvironment, casbin.ActionUpdate, object); !ok {
+	object := handler.enforcerUtil.GetObjectForHelmByAppIdAndEnvId(installedApp.AppId, installedApp.EnvironmentId)
+	if ok := handler.enforcer.Enforce(token, casbin.ResourceHelmAppWorkFlow, casbin.ActionUpdate, object); !ok {
 		common.WriteJsonResp(w, fmt.Errorf("unauthorized user"), nil, http.StatusForbidden)
 		return
 	}
@@ -306,12 +290,8 @@ func (handler InstalledAppRestHandlerImpl) GetAllInstalledApp(w http.ResponseWri
 	var installedAppsResponse []appstore.InstalledAppsResponse
 	for _, app := range res {
 		//rbac block starts from here
-		object := handler.enforcerUtil.GetAppRBACName(app.AppName)
-		if ok := handler.enforcer.Enforce(token, casbin.ResourceApplications, casbin.ActionGet, object); !ok {
-			continue
-		}
-		object = handler.enforcerUtil.GetAppRBACByAppNameAndEnvId(app.AppName, app.EnvironmentId)
-		if ok := handler.enforcer.Enforce(token, casbin.ResourceEnvironment, casbin.ActionGet, object); !ok {
+		object := handler.enforcerUtil.GetObjectForHelmByAppNameAndEnvId(app.AppName, app.EnvironmentId)
+		if ok := handler.enforcer.Enforce(token, casbin.ResourceHelmAppWorkFlow, casbin.ActionGet, object); !ok {
 			continue
 		}
 		//rback block ends here
@@ -347,12 +327,8 @@ func (handler InstalledAppRestHandlerImpl) GetInstalledAppsByAppStoreId(w http.R
 	var installedAppsResponse []appstore.InstalledAppsResponse
 	for _, app := range res {
 		//rbac block starts from here
-		object := handler.enforcerUtil.GetAppRBACName(app.AppName)
+		object := handler.enforcerUtil.GetObjectForHelmByAppNameAndEnvId(app.AppName, app.EnvironmentId)
 		if ok := handler.enforcer.Enforce(token, casbin.ResourceApplications, casbin.ActionGet, object); !ok {
-			continue
-		}
-		object = handler.enforcerUtil.GetAppRBACByAppNameAndEnvId(app.AppName, app.EnvironmentId)
-		if ok := handler.enforcer.Enforce(token, casbin.ResourceEnvironment, casbin.ActionGet, object); !ok {
 			continue
 		}
 		//rback block ends here
@@ -385,13 +361,8 @@ func (handler InstalledAppRestHandlerImpl) GetInstalledAppVersion(w http.Respons
 	}
 
 	//rbac block starts from here
-	object := handler.enforcerUtil.GetAppRBACName(dto.AppName)
-	if ok := handler.enforcer.Enforce(token, casbin.ResourceApplications, casbin.ActionGet, object); !ok {
-		common.WriteJsonResp(w, fmt.Errorf("unauthorized user"), nil, http.StatusForbidden)
-		return
-	}
-	object = handler.enforcerUtil.GetAppRBACByAppNameAndEnvId(dto.AppName, dto.EnvironmentId)
-	if ok := handler.enforcer.Enforce(token, casbin.ResourceEnvironment, casbin.ActionGet, object); !ok {
+	object := handler.enforcerUtil.GetObjectForHelmByAppNameAndEnvId(dto.AppName, dto.EnvironmentId)
+	if ok := handler.enforcer.Enforce(token, casbin.ResourceHelmAppWorkFlow, casbin.ActionGet, object); !ok {
 		common.WriteJsonResp(w, fmt.Errorf("unauthorized user"), nil, http.StatusForbidden)
 		return
 	}
@@ -434,13 +405,8 @@ func (handler InstalledAppRestHandlerImpl) DeleteInstalledApp(w http.ResponseWri
 		common.WriteJsonResp(w, err, nil, http.StatusInternalServerError)
 		return
 	}
-	object := handler.enforcerUtil.GetAppRBACNameByAppId(installedApp.AppId)
-	if ok := handler.enforcer.Enforce(token, casbin.ResourceApplications, casbin.ActionDelete, object); !ok {
-		common.WriteJsonResp(w, fmt.Errorf("unauthorized user"), nil, http.StatusForbidden)
-		return
-	}
-	object = handler.enforcerUtil.GetAppRBACByAppNameAndEnvId(installedApp.AppName, installedApp.EnvironmentId)
-	if ok := handler.enforcer.Enforce(token, casbin.ResourceEnvironment, casbin.ActionDelete, object); !ok {
+	object := handler.enforcerUtil.GetObjectForHelmByAppNameAndEnvId(installedApp.AppName, installedApp.EnvironmentId)
+	if ok := handler.enforcer.Enforce(token, casbin.ResourceHelmAppWorkFlow, casbin.ActionDelete, object); !ok {
 		common.WriteJsonResp(w, fmt.Errorf("unauthorized user"), nil, http.StatusForbidden)
 		return
 	}

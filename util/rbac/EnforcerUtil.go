@@ -41,6 +41,8 @@ type EnforcerUtil interface {
 	GetTeamAndEnvironmentRbacObjectByCDPipelineId(pipelineId int) (string, string)
 	GetRbacObjectsForAllAppsAndEnvironments() (map[int]string, map[string]string)
 	GetProjectAdminRBACNameBYAppName(appName string) string
+	GetObjectForHelmByAppIdAndEnvId(appId int, envId int) string
+	GetObjectForHelmByAppNameAndEnvId(appName string, envId int) string
 }
 type EnforcerUtilImpl struct {
 	logger                *zap.SugaredLogger
@@ -236,4 +238,28 @@ func (impl EnforcerUtilImpl) GetRbacObjectsForAllAppsAndEnvironments() (map[int]
 		}
 	}
 	return appObjects, envObjects
+}
+
+func (impl EnforcerUtilImpl) GetObjectForHelmByAppIdAndEnvId(appId int, envId int) string {
+	application, err := impl.appRepo.FindAppAndProjectByAppId(appId)
+	if err != nil {
+		return fmt.Sprintf("%s/%s", "", strings.ToLower(""))
+	}
+	env, err := impl.environmentRepository.FindById(envId)
+	if err != nil {
+		return fmt.Sprintf("%s/%s", "", strings.ToLower(""))
+	}
+	return fmt.Sprintf("%s/%s/%s", strings.ToLower(application.Team.Name), strings.ToLower(env.Name), strings.ToLower(application.AppName))
+}
+
+func (impl EnforcerUtilImpl) GetObjectForHelmByAppNameAndEnvId(appName string, envId int) string {
+	application, err := impl.appRepo.FindAppAndProjectByAppName(appName)
+	if err != nil {
+		return fmt.Sprintf("%s/%s", "", strings.ToLower(""))
+	}
+	env, err := impl.environmentRepository.FindById(envId)
+	if err != nil {
+		return fmt.Sprintf("%s/%s", "", strings.ToLower(""))
+	}
+	return fmt.Sprintf("%s/%s/%s", strings.ToLower(application.Team.Name), strings.ToLower(env.Name), strings.ToLower(application.AppName))
 }
